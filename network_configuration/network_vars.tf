@@ -1,3 +1,5 @@
+#Project
+variable "project" {}
 # VPC vars 
 variable "VPC_cidr" {}
 
@@ -38,4 +40,46 @@ locals {
   public_subnet_CIDR_only = [ for i, v in local.subnet_value : i if startswith( v["tier"], "frontend")]
 }
 
+locals {
+  web_subnet = [ for i, k in local.private_subnet_CIDR : i if startswith( k, "web") ]
+  web_subnet_id = [ for i  in local.web_subnet : aws_subnet.roboshop_subnets[i].id ]
+  frontend_subnet_id = [ for i  in local.public_subnet_CIDR_only : aws_subnet.roboshop_subnets[i].id ]
+}
 
+
+# Output values
+output "subnet_value_out" {
+  value = local.subnet_value
+}
+
+output "private_subnet_CIDR_out" {
+  value = local.private_subnet_CIDR
+}
+
+output "public_subnet_CIDR_only_out" {
+  value = local.public_subnet_CIDR_only
+}
+output "db_subnet_id_out" {
+  value = [ for i, k in local.private_subnet_CIDR : aws_subnet.roboshop_subnets[i].id if startswith(k, "database")]
+}
+
+output "roboshop_vpc_id_out" {
+  value = aws_vpc.roboshop_vpc.id
+}
+
+output "frontend_subnet_value_out" {
+  value = [ for i, k in local.subnet_value : aws_subnet.roboshop_subnets[i].id if startswith(k.tier, "frontend")]
+}
+
+output "web_subnet_value_out" {
+  value = [ for i, k in local.subnet_value : aws_subnet.roboshop_subnets[i].id if startswith(k.tier, "web")]
+}
+ 
+
+output "web_subnet_id_out" {
+  value = local.web_subnet_id
+}
+
+output "frontend_subnet_id_out" {
+  value = local.frontend_subnet_id
+}

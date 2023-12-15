@@ -1,6 +1,6 @@
 # Launch template resource
 resource "aws_launch_template" "roboshop_templates" {
-    for_each = var.components
+    for_each = toset(var.components)
     name = "${each.key}_template"
     image_id = data.aws_ami.roboshop_image.id
     instance_type = "t3.micro"
@@ -11,9 +11,9 @@ resource "aws_launch_template" "roboshop_templates" {
     }              
 
      network_interfaces {
-      associate_public_ip_address = true 
+      associate_public_ip_address = false 
       description = true 
-      security_groups = [startswith(each.key, "frontend") ? aws_security_group.roboshop_frontend_sgw.id : aws_security_group.roboshop_app_sgw.id ]
+      security_groups = [startswith(each.key, "frontend") ? var.frontend_sgw_id : var.app_sgw_id ]
 
     } 
 
@@ -31,7 +31,7 @@ resource "aws_launch_template" "roboshop_templates" {
 
 # ASG resource
 resource "aws_autoscaling_group" "roboshop_ASG" {
-    for_each = var.components
+    for_each = toset(var.components)
 
     name = "${each.key}_ASG"
 
@@ -43,9 +43,9 @@ resource "aws_autoscaling_group" "roboshop_ASG" {
     min_size = 1
     max_size = 4
 
-    vpc_zone_identifier = startswith( each.key, "frontend") ? local.frontend_subnet_id : local.web_subnet_id 
+    vpc_zone_identifier = startswith( each.key, "frontend") ? var.frontend_subnet_id : var.web_subnet_id 
 
-    target_group_arns = [ aws_lb_target_group.roboshop_TG[each.key].arn ]
+    target_group_arns = [ var.TG_arn[each.key]]
 
     tag {
       key = "Name"
@@ -53,12 +53,12 @@ resource "aws_autoscaling_group" "roboshop_ASG" {
       propagate_at_launch = true
     }
 
-    depends_on = [aws_nat_gateway.Public_NAT, aws_docdb_cluster.roboshop_mongodb, aws_elasticache_cluster.roboshop_redis, aws_db_instance.roboshop_mysql, aws_mq_broker.roboshop_rabbitmq]
+    #depends_on = [aws_nat_gateway.Public_NAT, aws_docdb_cluster.roboshop_mongodb, aws_elasticache_cluster.roboshop_redis, aws_db_instance.roboshop_mysql, aws_mq_broker.roboshop_rabbitmq]
 }
 
 
 resource "aws_autoscaling_policy" "roboshop_ASG_scaling_policy"{
-  for_each = var.components
+  for_each = toset(var.components)
   name = "${each.key}_ASG_scaling_policy"
 
   autoscaling_group_name = aws_autoscaling_group.roboshop_ASG[each.key].name
@@ -76,34 +76,7 @@ resource "aws_autoscaling_policy" "roboshop_ASG_scaling_policy"{
 
 
 resource "aws_autoscaling_attachment" "roboshop_ASG_TG" {
-  for_each = var.components
+  for_each = toset(var.components)
   autoscaling_group_name = aws_autoscaling_group.roboshop_ASG[each.key].id
-  lb_target_group_arn    = aws_lb_target_group.roboshop_TG[each.key].arn
+  lb_target_group_arn    = var.TG_arn[each.key]
 }
-
-# Target group resource
-resource "aws_lb_target_group" "roboshop_TG"{
-    for_each = var.components
-
-    name = "${each.key}-TG"
-    vpc_id = aws_vpc.roboshop_vpc.id
-    
-    target_type = "instance"
-    port = startswith(each.key, "frontend") ? 80 : 8080
-    protocol = "HTTP"
-    load_balancing_algorithm_type = "least_outstanding_requests"
-
-    health_check {
-      healthy_threshold = 2
-      unhealthy_threshold = 2
-      interval = 15
-      path = "/health" 
-      port = "traffic-port" 
-    }
-
-    tags = {
-      Name = "${each.key}_TG"
-    }
-} 
-
-
